@@ -1,0 +1,145 @@
+import pandas as pd
+from pandas.io.sas.sas_constants import column_name_text_subheader_length
+
+'''DATA CLEANING'''
+#loading customers, orders, and order_payment csv files into dataframe
+df_customer = pd.read_csv("olist_customers_dataset.csv")
+df_orders = pd.read_csv("olist_orders_dataset.csv")
+df_payment = pd.read_csv("olist_order_payments_dataset.csv")
+
+#join datasets into one table
+df1 = pd.merge(left= df_customer, right= df_orders, how= "inner", left_on="customer_id", right_on = "customer_id")
+df = pd.merge(left = df1, right = df_payment, how="inner", left_on= "order_id", right_on="order_id")
+
+#drop duplicates
+df.drop_duplicates()
+
+
+'''CUSTOMER ANALYSIS'''
+
+#  High-Value Customer Segmentation: getting customer whose total revenue is in 10%
+# extracting customer's payment history
+df_highValueCustomer = df[["customer_id", "order_id", "payment_value"]]
+
+# get total revenue of the platform
+totalRevenue = df_highValueCustomer["payment_value"].sum().round(2)
+
+# get total spending of each customer
+customerTotalSpending = df.groupby("customer_id")["payment_value"].sum().round(2).sort_values(ascending = False)
+
+#top10 revenue
+top10Revenue = customerTotalSpending.quantile(0.9)
+
+# extract customers who in range of top10 spending
+top10Customer = customerTotalSpending[customerTotalSpending >= top10Revenue]
+
+# add new columns to identify customer's segment
+df["customer_segment"] = df["customer_id"].isin(top10Customer.index).map({True: "High Value", False: "Regular"})
+
+# grouping customers based on repeated or one-time order
+OrderCount = df.groupby("customer_id")["order_id"].count()
+ReturnCustomer = OrderCount[OrderCount > 1]
+df["customer_type"] = df["customer_id"].isin(ReturnCustomer.index).map({True: "Repeat", False: "One-Time"})
+
+# extracting % of each customer_segment and customer_type accounted to total orders
+# customer_segment, customer_type, % accounted for total orders and total revenue
+totalOrders = df["order_id"].nunique()
+
+# group customer_segment and customer_type -> find total revenue and total orders for each group
+# reset_index = create a new columns total revenue/orders with sum(payment_value) and distinct count(order_id)
+customerSummary = df.groupby(["customer_segment","customer_type"]).agg(
+    total_revenue = ("payment_value", "sum"),
+    total_orders = ("order_id", "nunique")).reset_index()
+
+# create two columns order_percent and revenue_percent in customerSummary df
+customerSummary["order_percent"] = (customerSummary["total_orders"]/totalOrders*100).round(2)
+customerSummary["revenue_percent"] = (customerSummary["total_revenue"]/totalRevenue*100).round(2)
+
+'''REVENUE ANALYSIS'''
+
+# Calculate total revenue for each month (order_purchase_timestamp) (data from 2017-2018)
+# convert ["order_purchase_timestamp"] to datetime format
+df["order_purchase_timestamp"] = pd.to_datetime(df["order_purchase_timestamp"])
+
+# extract month from datetime - extract month/year (df.to_period('M') to get MM-YYYY
+df["month"] = df["order_purchase_timestamp"].dt.month_name()
+df["month_year"] = df["order_purchase_timestamp"].dt.to_period('M')
+
+#group by month to count revenue
+revenueByMonth = df.groupby("month_year")["payment_value"].sum()
+
+
+'''DELIVERY ANALYSIS'''
+
+#rename shipment columns to clarify information
+df_delivery = df.rename(columns={"order_delivered_carrier_date": "shipment_date", "order_delivered_customer_date": "actual_delivered_date", "order_estimated_delivery_date": "estimated_delivery_date"}, inplace= True)
+
+#calculate delay in delivery: 'estimated_delivery_date' - 'actual_delivered_date'
+# extract only neccessary data for delivery analysis to save running time
+df_delivery = df[["order_id", "customer_segment", "customer_type" , "shipment_date", "actual_delivered_date" , "estimated_delivery_date"]]
+
+#drop orders that not ship yet
+df_delivery = df_delivery.dropna(how="any")
+
+#convert all columns to datetime format
+for col in ["shipment_date", "actual_delivered_date" , "estimated_delivery_date"]:
+    df_delivery[col] = pd.to_datetime(df_delivery[col])
+
+# calculate if shipment is arrived on-time or late (how many day the shipment has delayed)
+df_delivery["delay_day"] = (df_delivery["actual_delivered_date"] - df_delivery["estimated_delivery_date"]).dt.days
+
+# create a function to confirm delivery status based on delivery delay day
+def delivery_status(date):
+    if pd.isna(date):
+        return "Unknown"
+    elif date > 1:
+        return "Delayed"
+    else:
+        return "On Time"
+
+# apply above function to delivery day as creating new "delivery_status" columns
+df_delivery["delivery_status"] = df_delivery["delay_day"].apply(delivery_status)
+
+# create a new columns to count total delivery statuses based on customer_segment and customer_type
+df_delivery_delay = df_delivery.groupby(["customer_type", "delivery_status"]).agg(
+    delivery_count = ("delivery_status", "count")).reset_index()
+
+# getting total customer with delivered order
+totalCustomer = df_delivery["order_id"].count()
+
+# getting % rate of delivery status of each customer's segments and types
+#delivery impact on repeat customer
+df_delivery_delay["delivery_rate"] = (df_delivery_delay["delivery_count"]/totalCustomer*100).round(2)
+
+
+'''GEOGRAPHIC ANALYSIS'''
+
+# extract only geographic info from big df
+df_geographic = df[["order_id", "customer_segment", "customer_type", "customer_state", "payment_value"]]
+
+# compute total revenue by state
+df_revenueByState = df_geographic.groupby("customer_state").agg(
+    total_revenue = ("payment_value", "sum")).reset_index()
+df_revenueByState["rank"] = df_revenueByState["total_revenue"].rank(ascending=False)
+
+#sort revenueByState by revenue rank
+df_revenueByState = df_revenueByState.sort_values(by="rank", ascending=True)
+
+#sorted avg revenue by each state
+avgRevenue = df_geographic.groupby("customer_state")["payment_value"].mean().round(2).sort_values(ascending=False)
+
+# calculate average delivery delay by state
+#merge df_geographic to df_delivery
+df_deliveryByGeo = pd.merge(df_geographic, df_delivery,how="inner", left_on="order_id", right_on="order_id")
+
+#drop duplicate columns
+df_deliveryByGeo = df_deliveryByGeo.drop(columns=["customer_segment_y", "customer_type_y"])
+
+# calculate avg delay by each state
+avgDelay = df_deliveryByGeo.groupby("customer_state")["delay_day"].mean().sort_values(ascending=True)
+
+
+
+
+
+
