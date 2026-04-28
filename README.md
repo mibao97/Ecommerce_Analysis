@@ -5,17 +5,24 @@ Key components include data cleaning and transformation, customer segmentation (
 
 
 📌 Project Overview
+
 This project analyzes a Brazilian e-commerce dataset to uncover insights into customer behavior, retention patterns, and revenue drivers.
 The goal is to design an end-to-end ELT data pipeline that transforms raw transactional data into actionable business insights.
 
 📌 Business Objectives
+
 Understand customer purchasing behavior
+
 Identify high-value customers
+
 Analyze drivers of revenue growth
+
 Evaluate how delivery performance impacts repeat purchases
+
 Measure customer retention over time
 
 📌 Project Architecture (ELT)
+
     1. Extract
         Load raw CSV datasets into Python (Pandas DataFrames)
     2. Load
@@ -24,6 +31,7 @@ Measure customer retention over time
         Perform cleaning, feature engineering, and aggregation using Python and visualize insights using Tableau
         
 📌 Key Analysis
+
     1. Customer Analysis
         🔹 Customer Segmentation
             - Revenue contribution by customer segmentation
@@ -50,6 +58,7 @@ Measure customer retention over time
         🔹 Regional Delivery Performance
             - Highlighted regions with operational inefficiencies
 📌 Insights
+
     1. Revenue Concentration
         A small percentage of customers (top ~10%) contribute a disproportionately large share of total revenue.
     2. Customer Retention
