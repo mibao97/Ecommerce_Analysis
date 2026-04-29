@@ -1,4 +1,8 @@
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.pyplot import colormaps
+
 
 '''DATA CLEANING'''
 #loading customers, orders, and order_payment csv files into dataframe
@@ -13,9 +17,7 @@ df = pd.merge(left = df1, right = df_payment, how="inner", left_on= "order_id", 
 #drop duplicates
 df.drop_duplicates()
 
-
 '''CUSTOMER ANALYSIS'''
-
 #  High-Value Customer Segmentation: getting customer whose total revenue is in 10%
 # extracting customer's payment history
 df_highValueCustomer = df[["customer_id", "order_id", "payment_value"]]
@@ -29,11 +31,25 @@ customerTotalSpending = df.groupby("customer_id")["payment_value"].sum().round(2
 #top10 revenue
 top10Revenue = customerTotalSpending.quantile(0.9)
 
-# extract customers who in range of top10 spending
-top10Customer = customerTotalSpending[customerTotalSpending >= top10Revenue]
+#bottom10 customer bracket
+bottom10 = customerTotalSpending.quantile(0.1)
 
-# add new columns to identify customer's segment
-df["customer_segment"] = df["customer_id"].isin(top10Customer.index).map({True: "High Value", False: "Regular"})
+#define customer's segment formular
+def segment(x):
+    if x >= top10Revenue:
+        return "High Value"
+    elif x <= bottom10:
+        return "Low Value"
+    else:
+        return "Mid Value"
+
+# save customer_segment as a copy of customerTotalSpending to categorize customer based on spending bracket.
+customer_segment = customerTotalSpending.copy()
+customer_segment = customer_segment.apply(segment)
+
+# create a new customer_segment columns based on each customer's spending amount
+df["customer_segment"] = df["customer_id"].map(customer_segment)
+
 
 # grouping customers based on repeated or one-time order
 OrderCount = df.groupby("customer_id")["order_id"].count()
@@ -55,7 +71,6 @@ customerSummary["order_percent"] = (customerSummary["total_orders"]/totalOrders*
 customerSummary["revenue_percent"] = (customerSummary["total_revenue"]/totalRevenue*100).round(2)
 
 '''REVENUE ANALYSIS'''
-
 # Calculate total revenue for each month (order_purchase_timestamp) (data from 2017-2018)
 # convert ["order_purchase_timestamp"] to datetime format
 df["order_purchase_timestamp"] = pd.to_datetime(df["order_purchase_timestamp"])
@@ -67,9 +82,7 @@ df["month_year"] = df["order_purchase_timestamp"].dt.to_period('M')
 #group by month to count revenue
 revenueByMonth = df.groupby("month_year")["payment_value"].sum()
 
-
 '''DELIVERY ANALYSIS'''
-
 #rename shipment columns to clarify information
 df_delivery = df.rename(columns={"order_delivered_carrier_date": "shipment_date", "order_delivered_customer_date": "actual_delivered_date", "order_estimated_delivery_date": "estimated_delivery_date"}, inplace= True)
 
@@ -110,7 +123,6 @@ totalCustomer = df_delivery["order_id"].count()
 #delivery impact on repeat customer
 df_delivery_delay["delivery_rate"] = (df_delivery_delay["delivery_count"]/totalCustomer*100).round(2)
 
-
 '''GEOGRAPHIC ANALYSIS'''
 
 # extract only geographic info from big df
@@ -135,8 +147,75 @@ df_deliveryByGeo = pd.merge(df_geographic, df_delivery,how="inner", left_on="ord
 df_deliveryByGeo = df_deliveryByGeo.drop(columns=["customer_segment_y", "customer_type_y"])
 
 # calculate avg delay by each state
-avgDelay = df_deliveryByGeo.groupby("customer_state")["delay_day"].mean().sort_values(ascending=True)
+avgDelay = df_deliveryByGeo.groupby("customer_state")[["delay_day", "payment_value"]].mean().sort_values(by="delay_day", ascending=True).round(2)
 
+'''VISUALIZATION'''
+# plot customer_segment and its revenue
+pivot = customerSummary.pivot_table(columns="customer_segment", index= "customer_type", values="revenue_percent", aggfunc="sum")
+pivot = pivot.sort_values(by=pivot.columns.tolist(), ascending= False)
+pivot.plot(kind="bar", figsize=(9,5), colormap="viridis")
+
+plt.xlabel("Customer Segments")
+plt.ylabel("Revenue Contribution (%)")
+plt.title("Revenue Contribution by Customer Segments", weight="bold")
+plt.xticks(rotation = 360)
+plt.legend(title="Customer Type")
+
+
+
+#plot revenue by quarter
+revenuePlt = df.groupby("month_year")["payment_value"].mean().round(2)
+
+plt.figure(figsize=(10,5))
+plt.plot(revenuePlt.index.to_timestamp(),
+         revenuePlt.values,
+         marker = "o",
+         color= "blue")
+
+plt.xlabel("Month in Year")
+plt.ylabel("Average Revenue in $")
+plt.title("Average Revenue by Month", weight = "bold")
+plt.grid(alpha=0.3)
+
+
+#plot delivery analysis
+deliveryPlt = df_delivery_delay.pivot_table(index="customer_type",columns="delivery_status",values="delivery_rate", aggfunc="sum")
+deliveryPlt = deliveryPlt.sort_values(by=deliveryPlt.columns.tolist(), ascending= True)
+
+plt.figure(figsize=(10,5))
+deliveryPlt.plot(kind="bar", colormap="viridis")
+
+plt.xlabel("Delivery Status")
+plt.ylabel("Delivery Rate")
+plt.title("Delivery Analysis", weight = "bold")
+plt.xticks(rotation = 45)
+axes = plt.gca()
+#axes.set_yscale("log")
+
+
+#plotting avg delay days and revenue by state
+#top 5 has lowest delay days and its revenue
+geo = avgDelay.copy()
+geo["rank"] = geo["delay_day"].rank(ascending= True)
+top5Earliest = avgDelay.nsmallest(5, "delay_day")
+
+plt.figure(figsize=(8,5))
+plt.scatter(
+    top5Earliest["delay_day"],
+    top5Earliest["payment_value"],
+    color = ["green", "blue", "yellow", "red", "purple"],
+    s=100,
+    alpha=0.7
+)
+
+plt.xlabel("Revenue")
+plt.ylabel("Average Delay (days)")
+plt.title("Top 5 States: Shortest Delay vs Revenue", weight = "bold")
+plt.grid(True)
+
+
+
+plt.show()
 
 
 
