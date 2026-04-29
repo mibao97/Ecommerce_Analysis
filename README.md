@@ -73,6 +73,10 @@ Measure customer retention over time
 
 <img width="900" height="500" alt="Figure_1" src="https://github.com/user-attachments/assets/f5fbc9ca-3cdd-40c3-9261-fc1df0958152" />
 
-<img width="1000" height="500" alt="Figure_2" src="https://github.com/user-attachments/assets/8c0010d9-ccdb-4fd3-b30e-1142aa88c333" />
+<img width="1000" height="500" alt="Figure_2" src="https://github.com/user-attachments/assets/79968691-f13a-4e34-ac3a-aaf1ce2b6d9b" />
 
-<img width="640" height="480" alt="Figure_4" src="https://github.com/user-attachments/assets/ab54ba7e-7ad8-4a7f-9790-53fe3f1a3c12" />
+<img width="640" height="480" alt="Figure_4" src="https://github.com/user-attachments/assets/983c6aec-cf1e-4906-bd05-4752f8f6dcec" />
+
+<img width="800" height="500" alt="Figure_5" src="https://github.com/user-attachments/assets/acc55877-00d9-460c-8d8c-9b70ea3ddd3a" />
+
+
